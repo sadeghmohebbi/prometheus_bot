@@ -8,7 +8,7 @@ RUN GOGC=off CGO_ENABLED=0 go build -v -o prometheus_bot
 
 
 FROM alpine:3.15.0
-RUN apk add --no-cache ca-certificates tzdata openvpn openconnect
+RUN apk add --no-cache ca-certificates tzdata
 
 EXPOSE 9087
 WORKDIR /app
