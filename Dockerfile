@@ -7,8 +7,8 @@ COPY . .
 RUN GOGC=off CGO_ENABLED=0 go build -v -o prometheus_bot
 
 
-FROM alpine:3.15.0
-RUN apk add --no-cache ca-certificates tzdata
+FROM ubuntu:20.04
+RUN apt-get update && apt-get -y install ca-certificates tzdata
 
 EXPOSE 9087
 WORKDIR /app
