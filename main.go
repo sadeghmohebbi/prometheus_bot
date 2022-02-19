@@ -12,6 +12,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"encoding/base64"
 	"path"
 	"sort"
 	"strconv"
@@ -420,7 +421,22 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	proxiedClient := &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(proxyUrl)}}
+
+	customTransport := &http.Transport{Proxy: http.ProxyURL(proxyUrl)}
+
+	userpass, isProxyPassSet := proxyUrl.User.Password()
+	if (isProxyPassSet) {
+		username := proxyUrl.User.Username()
+
+		auth := username + ":" + userpass
+    basicAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte(auth))
+    hdr := http.Header{}
+    hdr.Add("Proxy-Authorization", basicAuth)
+
+		customTransport.ProxyConnectHeader = hdr
+		// customTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
+	proxiedClient := &http.Client{Transport: customTransport}
 	bot_tmp, err := tgbotapi.NewBotAPIWithClient(cfg.TelegramToken, proxiedClient)
 	if err != nil {
 		log.Fatal(err)
