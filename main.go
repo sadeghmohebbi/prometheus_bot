@@ -2,6 +2,7 @@ package main // import "github.com/inCaller/prometheus_bot"
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"flag"
@@ -11,21 +12,19 @@ import (
 	"log"
 	"math"
 	"net/http"
-	"net/url"
-	"encoding/base64"
+	"os"
 	"path"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
-	"os"
 
 	"html/template"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/microcosm-cc/bluemonday"
-	tgbotapi "gopkg.in/telegram-bot-api.v4"
 
 	"gopkg.in/yaml.v2"
 )
@@ -115,6 +114,17 @@ func RoundPrec(x float64, prec int) float64 {
 	}
 
 	return rounder / pow * sign
+}
+
+type transport struct {
+	underlyingTransport http.RoundTripper
+}
+
+func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
+	auth := os.Getenv("PROXY_CLIENT_KEY") + ":" + os.Getenv("PROXY_CLIENT_SELECT")
+	basicAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte(auth))
+	req.Header.Add("Authorization", basicAuth)
+	return t.underlyingTransport.RoundTrip(req)
 }
 
 /******************************************************************************
@@ -324,10 +334,7 @@ func telegramBot(bot *tgbotapi.BotAPI) {
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 
-	updates, err := bot.GetUpdatesChan(u)
-	if err != nil {
-		log.Fatal(err)
-	}
+	updates := bot.GetUpdatesChan(u)
 
 	introduce := func(update tgbotapi.Update) {
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, fmt.Sprintf("Chat id is '%d'", update.Message.Chat.ID))
@@ -345,8 +352,8 @@ func telegramBot(bot *tgbotapi.BotAPI) {
 			continue
 		}
 
-		if update.Message.NewChatMembers != nil && len(*update.Message.NewChatMembers) > 0 {
-			for _, member := range *update.Message.NewChatMembers {
+		if update.Message.NewChatMembers != nil && len(update.Message.NewChatMembers) > 0 {
+			for _, member := range update.Message.NewChatMembers {
 				if member.UserName == bot.Self.UserName && update.Message.Chat.Type == "group" {
 					introduce(update)
 				}
@@ -417,27 +424,8 @@ func main() {
 		cfg.SplitMessageBytes = 4000
 	}
 
-	proxyUrl, err := url.Parse(os.Getenv("HTTP_PROXY"))
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	customTransport := &http.Transport{Proxy: http.ProxyURL(proxyUrl)}
-
-	userpass, isProxyPassSet := proxyUrl.User.Password()
-	if (isProxyPassSet) {
-		username := proxyUrl.User.Username()
-
-		auth := username + ":" + userpass
-    basicAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte(auth))
-    hdr := http.Header{}
-    hdr.Add("Proxy-Authorization", basicAuth)
-
-		customTransport.ProxyConnectHeader = hdr
-		// customTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	}
-	proxiedClient := &http.Client{Transport: customTransport}
-	bot_tmp, err := tgbotapi.NewBotAPIWithClient(cfg.TelegramToken, proxiedClient)
+	proxiedClient := &http.Client{Transport: &transport{underlyingTransport: http.DefaultTransport}}
+	bot_tmp, err := tgbotapi.NewBotAPIWithClient(cfg.TelegramToken, "https://telegram-api-httpproxy-server.herokuapp.com/bot%s/%s", proxiedClient)
 	if err != nil {
 		log.Fatal(err)
 	}
