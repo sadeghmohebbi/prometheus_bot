@@ -17,4 +17,4 @@ COPY --from=builder /app/prometheus_bot ./prometheus_bot
 COPY --from=builder /app/default.tmpl ./default.tmpl
 COPY --from=builder /app/config.yml ./config.yml
 
-CMD ["./prometheus_bot", "-c", "config.yml", "-l", "9087", "-t", "default.tmpl"]
+CMD ["./prometheus_bot", "-c", "config.yml"]
